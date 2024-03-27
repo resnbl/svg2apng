@@ -10,7 +10,7 @@ This may require some editing on the caller's part.
 
 ### Usage ###
 
-`python3 svg2apng.py [-help] [-width ww] [-height hh] [-duration dd] <folder>`
+`python3 svg2apng.py [-dur ddd] [-width www] [-height hhh] [-help]  <folder>`
 
 where:
 
@@ -31,9 +31,10 @@ change the size of the image. *Note:* the `repeatCount` parameter for all animat
 amount of time - not `indefinite`.
 Having the `index.html` file open in a browser eases the "edit, save, refresh" cycle.
 
-Calling the app a second time will generate a `convert.html` file that embeds the second `.svg` file inside it using another template.
+Calling the app a second time will generate a `convert.html` file that embeds the second `.svg` file inside itself 
+using another template.
 This HTML is designed to display the image and take snapshots while the animation runs.
-The `-duration` parameter does double duty in that it also specifies how often these snapshots are taken.
+The `-dur` parameter does double duty in that it also specifies how often these snapshots are taken.
 The script in the HTML stops creating snapshots when the animations all stop -
 hence the need for `repeatCount` parameters to be finite values.
 After the "Frame #" outputs stop appearing in the browser window,
@@ -44,7 +45,7 @@ Finally, calling the app a third time will read the downloaded `.json` file and 
 an animated `<folder>.png`.
 
 This mechanism for determining which "step" of the program operation to perform is done by
-checking for the existence of files generated during a previous run. I.e., if the `index.html`
+checking for the existence of files generated during the previous run. I.e., if the `index.html`
 file does not exist, run step 1. If the `convert.html` file does not exist, run step 2.
 If the `<folder>.png` file does not exist, run step 3.
 
