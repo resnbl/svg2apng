@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Dump SVG</title>
+  <style>
+    body { background-color: black; color: white; }
+ </style>
+</head>
+<body>
+<div style="display:flex">
+  <div id="svgcontainer">
+{{svg_src}}
+  </div>
+  <canvas id="canvas" width="{{canvas_width}}" height="{{canvas_height}}"></canvas>
+</div>
+<p>Exported PNGs:</p>
+<div id="output"></div>
+<div>
+	<button id="saveme" onClick="saveJson()">Save {{output_filename}}</button>
+</div>
+</body>
+<script>
+var svgcontainer, svg, canvas, ctx, output, interval;
+var num = 0;
+var intervalMS = {{duration_ms}};
+const specProps = new Map([
+                          ['stroke-dashoffset', 'strokeDashoffset']
+                          ]);
+
+const nsResolver = prefix => {
+  var ns = {
+    'svg': 'http://www.w3.org/2000/svg',
+    'xlink': 'http://www.w3.org/1999/xlink'
+  };
+  return ns[prefix] || null;
+};
+
+const takeSnap = function() {
+  // get all animateTransform elements
+  let animateXPath = document.evaluate('//svg:*[svg:animateTransform]', svg, nsResolver, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+
+  // store all animateTransform animVal.matrix in a dataset attribute
+  Object.keys([...Array(animateXPath.snapshotLength)]).forEach(i => {
+    let node = animateXPath.snapshotItem(i);
+    let mStr = [...node.transform.animVal].map(animVal => {
+      let m = animVal.matrix;
+      return `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`;
+    }).join(' ');
+    node.dataset.transform = mStr;
+  });
+
+  // get all animate elements
+  animateXPath = document.evaluate('//svg:animate', svg, nsResolver, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+
+  // store all animate properties in a dataset attribute on the target for the animation
+  Object.keys([...Array(animateXPath.snapshotLength)]).forEach(i => {
+    let node = animateXPath.snapshotItem(i);
+    let propName = node.getAttribute('attributeName');
+    let target = node.targetElement;
+    let computedVal = getComputedStyle(target)[propName];
+    if (specProps.has(propName)) propName = specProps.get(propName);
+    target.dataset[propName] = computedVal;
+  });
+
+  // create a copy of the SVG DOM
+  let parser = new DOMParser();
+  let svgcopy = parser.parseFromString(svg.outerHTML, "application/xml");
+
+  // find all elements with a dataset attribute
+  animateXPath = svgcopy.evaluate('//svg:*[@*[starts-with(name(), "data")]]', svgcopy, nsResolver, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+
+  // copy the animated property to a style or attribute on the same element
+  Object.keys([...Array(animateXPath.snapshotLength)]).forEach(i => {
+    let node = animateXPath.snapshotItem(i);
+    // for each data-
+    for (key in node.dataset) {
+      if (key == 'transform') {
+        node.setAttribute(key, node.dataset[key]);
+      } else {
+        node.style[key] = node.dataset[key];
+      }
+    }
+  });
+
+  // find all animate and animateTransform elements from the copy document
+  animateXPath = svgcopy.evaluate('//svg:*[starts-with(name(), "animate")]', svgcopy, nsResolver, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+
+  // remove all animate and animateTransform elements from the copy document
+  Object.keys([...Array(animateXPath.snapshotLength)]).forEach(i => {
+    let node = animateXPath.snapshotItem(i);
+    node.remove();
+  });
+
+  // create a File object
+  let file = new File([svgcopy.rootElement.outerHTML], 'svg.svg', {
+    type: "image/svg+xml"
+  });
+  // and a reader
+  let reader = new FileReader();
+
+  reader.addEventListener('load', e => {
+    /* create a new image assign the result of the filereader
+    to the image src */
+    let img = new Image();
+    // wait got load
+    img.addEventListener('load', e => {
+      // update canvas with new image
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // ctx.fillStyle = 'black';
+      // ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(e.target, 0, 0);
+      // create PNG image based on canvas
+      //let img = new Image();
+      //img.src = canvas.toDataURL("image/png");
+      //output.append(img);
+      // let a = document.createElement('A');
+      // a.textContent = String(num).padStart(3, '0') + '-d' + String(intervalMS).padStart(3, '0') + outfn;
+      // a.href = canvas.toDataURL("image/png");
+      // a.download = a.textContent;
+      // output.append(a, ' ');
+      jsonObj.pics.push(canvas.toDataURL("image/png"));
+      // let p = document.createElement('p');
+      // p.textContent = 'Frame ' + String(num);
+      // output.append(p);
+      if (num > 0)
+        output.append(', ');
+      output.append('Frame ' + String(num));
+      num++;
+    });
+    img.src = e.target.result;
+  });
+  // read the file as a data URL
+  reader.readAsDataURL(file);
+};
+
+document.addEventListener('DOMContentLoaded', e => {
+  svgcontainer = document.getElementById('svgcontainer');
+  canvas = document.getElementById('canvas');
+  output = document.getElementById('output');
+  output.innerHTML = '<p>Interval: ' + String(intervalMS) + '</p>';
+	
+  ctx = canvas.getContext('2d');
+
+  let parser = new DOMParser();
+  let svgdoc = parser.parseFromString(svgcontainer.innerHTML, "application/xml");
+  canvas.width = svgdoc.rootElement.getAttribute('width');
+  canvas.height = svgdoc.rootElement.getAttribute('height');
+
+  jsonObj = { duration: intervalMS, width: canvas.width, height: canvas.height, pics: [] };
+	
+  //svgcontainer.innerHTML = svgdoc.rootElement.outerHTML;
+  svg = svgcontainer.querySelector('svg');
+  //console.log(svg);
+
+  // set interval
+  interval = setInterval(takeSnap, intervalMS);
+
+  // get all
+  let animateXPath = document.evaluate('//svg:*[starts-with(name(), "animate")]', svg, nsResolver, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+
+  let animationArr = Object.keys([...Array(animateXPath.snapshotLength)]).map(i => {
+    let node = animateXPath.snapshotItem(i);
+    return new Promise((resolve, reject) => {
+      node.addEventListener('endEvent', e => {
+        resolve();
+      });
+    });
+  });
+  Promise.all(animationArr).then(value => {
+    clearInterval(interval);
+  });
+});
+
+function saveJson() {
+	//console.log('saveJson called');
+	const blob = new Blob([JSON.stringify(jsonObj)]);
+	const a = document.createElement('a');
+	a.href = URL.createObjectURL(blob, {type: 'application/json'});
+	a.download = '{{output_filename}}';
+	a.click();
+}
+
+</script>
+</html>
